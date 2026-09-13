@@ -1,0 +1,6 @@
+mutation ReviewApplication {
+  updateApplicationStatus(id: "application-1", status: REVIEWING) {
+    id
+    status
+  }
+}

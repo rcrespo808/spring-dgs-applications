@@ -1,0 +1,23 @@
+"""Job application sandbox. All demo identities are fictional."""
+type Query {
+  jobs(limit: Int! = 20, offset: Int! = 0): [Job!]!
+  candidates(limit: Int! = 20, offset: Int! = 0): [Candidate!]!
+  applications(status: ApplicationStatus, limit: Int! = 20, offset: Int! = 0): [Application!]!
+  application(id: ID!): Application
+}
+
+type Mutation {
+  applyToJob(input: ApplyInput!): Application
+  updateApplicationStatus(id: ID!, status: ApplicationStatus!): Application
+}
+
+input ApplyInput { jobId: ID!, candidateId: ID! }
+type Job { id: ID!, title: String!, company: String! }
+type Candidate { id: ID!, name: String! }
+type Application {
+  id: ID!
+  status: ApplicationStatus!
+  job: Job!
+  candidate: Candidate!
+}
+enum ApplicationStatus { SUBMITTED REVIEWING INTERVIEW OFFERED REJECTED }

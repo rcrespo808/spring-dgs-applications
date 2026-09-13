@@ -1,0 +1,7 @@
+mutation Apply {
+  applyToJob(input: { jobId: "job-2", candidateId: "candidate-3" }) {
+    id
+    status
+    job { title }
+  }
+}
