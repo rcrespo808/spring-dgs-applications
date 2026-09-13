@@ -1,0 +1,5 @@
+mutation Revalue {
+  setReferencePrice(symbol: "BTC", usdReference: "66000", expectedVersion: 0) {
+    symbol usdReference version
+  }
+}

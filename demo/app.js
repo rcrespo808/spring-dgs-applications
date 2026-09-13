@@ -1,102 +1,68 @@
-import { buildSchema, graphql, GraphQLError } from 'graphql';
-import { createIcons, Braces, Github, Play, RotateCcw } from 'lucide';
-import schemaText from '../src/main/resources/schema/applications.graphqls';
+import { buildSchema, graphql } from 'graphql';
+import { createIcons, Activity, Github, Play, RotateCcw, BookOpen } from 'lucide';
+import schemaText from '../src/main/resources/schema/markets.graphqls';
+import { createMarket } from './market.js';
+import { createFeed } from './binance.js';
 
 const schema = buildSchema(schemaText);
-const jobs = [
-  { id: 'job-1', title: 'Backend Java Engineer', company: 'Example Labs' },
-  { id: 'job-2', title: 'Platform Engineer', company: 'Demo Systems' },
-];
-const candidates = [
-  { id: 'candidate-1', name: 'Alex Demo' },
-  { id: 'candidate-2', name: 'Sam Example' },
-  { id: 'candidate-3', name: 'Taylor Sample' },
-];
-let applications;
-function reset() {
-  applications = [
-    { id: 'application-1', jobId: 'job-1', candidateId: 'candidate-1', status: 'SUBMITTED' },
-    { id: 'application-2', jobId: 'job-1', candidateId: 'candidate-2', status: 'REVIEWING' },
-  ];
-}
-const fail = (code, message) => { throw new GraphQLError(message, { extensions: { code } }); };
-function page(items, { limit, offset }) {
-  if (limit < 1 || limit > 100 || offset < 0) fail('BAD_INPUT', 'limit must be 1..100 and offset must be non-negative');
-  return [...items].sort((a, b) => a.id.localeCompare(b.id)).slice(offset, offset + limit);
-}
-function expand(application) {
-  if (!application) return null;
-  return { ...application, job: () => jobs.find(job => job.id === application.jobId), candidate: () => candidates.find(candidate => candidate.id === application.candidateId) };
-}
-const transitions = { SUBMITTED: ['REVIEWING', 'REJECTED'], REVIEWING: ['INTERVIEW', 'REJECTED'], INTERVIEW: ['OFFERED', 'REJECTED'], OFFERED: [], REJECTED: [] };
-const rootValue = {
-  jobs: args => page(jobs, args),
-  candidates: args => page(candidates, args),
-  applications: args => page(applications.filter(item => !args.status || item.status === args.status), args).map(expand),
-  application: ({ id }) => expand(applications.find(item => item.id === id)),
-  applyToJob: ({ input }) => {
-    if (!input.jobId.trim() || !input.candidateId.trim()) fail('BAD_INPUT', 'jobId and candidateId must not be blank');
-    if (!jobs.some(job => job.id === input.jobId) || !candidates.some(candidate => candidate.id === input.candidateId)) fail('NOT_FOUND', 'Job or candidate does not exist');
-    if (applications.some(item => item.jobId === input.jobId && item.candidateId === input.candidateId)) fail('ALREADY_APPLIED', 'Candidate has already applied to this job');
-    const application = { id: crypto.randomUUID(), ...input, status: 'SUBMITTED' };
-    applications.push(application);
-    return expand(application);
-  },
-  updateApplicationStatus: ({ id, status }) => {
-    const application = applications.find(item => item.id === id);
-    if (!application) fail('NOT_FOUND', 'Application does not exist');
-    if (!transitions[application.status].includes(status)) fail('INVALID_TRANSITION', `Cannot transition from ${application.status} to ${status}`);
-    application.status = status;
-    return expand(application);
-  },
-};
+let market = createMarket();
 const examples = {
-  browse: 'query BrowseApplications {\n  applications(limit: 20) {\n    id\n    status\n    job { title company }\n    candidate { name }\n  }\n}',
-  jobs: 'query AvailableJobs {\n  jobs { id title company }\n  candidates { id name }\n}',
-  apply: 'mutation Apply {\n  applyToJob(input: {\n    jobId: "job-2"\n    candidateId: "candidate-3"\n  }) {\n    id\n    status\n    job { title }\n  }\n}',
-  review: 'mutation Review {\n  updateApplicationStatus(\n    id: "application-1"\n    status: REVIEWING\n  ) { id status }\n}',
-  filter: 'query InReview {\n  applications(status: REVIEWING) {\n    id\n    candidate { name }\n    job { title }\n  }\n}',
-  invalid: 'mutation SkipSteps {\n  updateApplicationStatus(\n    id: "application-1"\n    status: OFFERED\n  ) { id status }\n}',
+  live: '{\n  binancePrices {\n    symbol\n    price\n    quoteAsset\n    change24h\n    observedAt\n    source\n  }\n}',
+  pairs: '{\n  pairs {\n    id\n    base { symbol kind }\n    quote { symbol kind }\n    referenceRate\n  }\n}',
+  assets: '{\n  assets {\n    symbol name kind\n    usdReference version\n  }\n}',
+  convert: '{\n  convert(from: "ETH", to: "BTC", amount: "2") {\n    from to\n    amount\n    rate\n    result\n  }\n}',
+  indices: '{\n  indices {\n    id name\n    level valueUsd divisor\n    constituents {\n      asset { symbol usdReference }\n      quantity\n    }\n  }\n}',
+  price: 'mutation {\n  setReferencePrice(\n    symbol: "BTC"\n    usdReference: "66000"\n    expectedVersion: 0\n  ) { symbol usdReference version }\n}',
+  add: 'mutation {\n  addPair(base: "SOL", quote: "EUR") {\n    id referenceRate\n    base { symbol }\n    quote { symbol }\n  }\n}',
 };
 const query = document.querySelector('#query');
 const result = document.querySelector('#result');
 const status = document.querySelector('#status');
 const runButton = document.querySelector('#run');
+const histories = new Map();
+function drawHistory(symbol, price) {
+  const values = histories.get(symbol) || [];
+  values.push(Number(price)); if (values.length > 90) values.shift(); histories.set(symbol, values);
+  const canvas = document.querySelector(`[data-chart="${symbol}"]`);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const low = Math.min(...values), span = Math.max(...values) - low || 1;
+  ctx.strokeStyle = '#18836c'; ctx.lineWidth = 2; ctx.beginPath();
+  values.forEach((p,i) => { const x = 2 + i * (canvas.width - 4) / Math.max(1, values.length - 1); const y = canvas.height - 5 - (p - low) / span * (canvas.height - 10); if (i) ctx.lineTo(x,y); else ctx.moveTo(x,y); });
+  ctx.stroke();
+}
+const feed = createFeed((quotes, state) => {
+  document.querySelector('#feed-status').textContent = state;
+  for (const q of quotes.filter(Boolean)) {
+    const row = document.querySelector(`[data-symbol="${q.symbol}"]`);
+    row.querySelector('.price').textContent = new Intl.NumberFormat('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(q.price);
+    const change = row.querySelector('.change');
+    change.textContent = `${Number(q.change24h) >= 0 ? '+' : ''}${q.change24h}%`;
+    change.classList.toggle('negative', Number(q.change24h) < 0);
+    row.querySelector('time').textContent = new Date(q.observedAt).toLocaleTimeString();
+    row.querySelector('time').dateTime = q.observedAt;
+    row.classList.toggle('stale', Date.now() - Date.parse(q.observedAt) >= 30000);
+    drawHistory(q.symbol, q.price);
+  }
+});
+window.addEventListener('pagehide', () => feed.stop());
 async function run() {
   runButton.disabled = true;
-  const started = performance.now();
   try {
     const variableValues = JSON.parse(document.querySelector('#variables').value || '{}');
     if (!variableValues || Array.isArray(variableValues) || typeof variableValues !== 'object') throw new Error('Variables must be a JSON object');
-    const response = await graphql({ schema, source: query.value, rootValue, variableValues });
+    const response = await graphql({schema, source: query.value, rootValue: {...market, binancePrices: () => feed.prices()}, variableValues});
     result.textContent = JSON.stringify(response, null, 2);
-    status.textContent = `${response.errors ? 'Errors' : 'Complete'} · ${Math.round(performance.now() - started)} ms`;
+    status.textContent = response.errors ? 'Errors' : 'Complete';
     status.classList.toggle('error', !!response.errors);
-  } catch (error) {
-    result.textContent = JSON.stringify({ errors: [{ message: error.message }] }, null, 2);
-    status.textContent = 'Invalid input';
-    status.classList.add('error');
-  } finally {
-    runButton.disabled = false;
-  }
+  } catch(error) { result.textContent = JSON.stringify({errors: [{message: error.message}]}, null, 2); status.textContent = 'Invalid input'; status.classList.add('error'); }
+  finally { runButton.disabled = false; }
 }
-document.querySelector('#example').addEventListener('change', event => {
-  query.value = examples[event.target.value];
-  document.querySelector('#variables').value = '{}';
-});
+document.querySelector('#example').addEventListener('change', event => { query.value = examples[event.target.value]; document.querySelector('#variables').value = '{}'; });
 runButton.addEventListener('click', run);
-document.querySelector('#reset').addEventListener('click', () => {
-  reset();
-  query.value = examples.browse;
-  document.querySelector('#example').value = 'browse';
-  document.querySelector('#variables').value = '{}';
-  run();
-});
-query.addEventListener('keydown', event => {
-  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); run(); }
-});
-createIcons({ icons: { Braces, Github, Play, RotateCcw } });
+document.querySelector('#reset').addEventListener('click', () => { market = createMarket(); query.value = examples.pairs; document.querySelector('#example').value = 'pairs'; document.querySelector('#variables').value = '{}'; run(); });
+query.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); run(); } });
+createIcons({icons: {Activity, Github, Play, RotateCcw, BookOpen}});
 document.querySelector('#schema').textContent = schemaText;
-reset();
-query.value = examples.browse;
+query.value = examples.pairs;
 run();

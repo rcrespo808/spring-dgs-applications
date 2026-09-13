@@ -1,8 +1,0 @@
-query BrowseApplications {
-  applications(limit: 20) {
-    id
-    status
-    job { id title company }
-    candidate { id name }
-  }
-}

@@ -1,0 +1,20 @@
+"""Synthetic reference data. Rates are quote units per one base unit."""
+type Query {
+  binancePrices: [ExchangePrice!]
+  assets(kind: AssetKind, limit: Int! = 20, offset: Int! = 0): [Asset!]!
+  pairs(limit: Int! = 20, offset: Int! = 0): [TradingPair!]!
+  indices: [MarketIndex!]!
+  convert(from: String!, to: String!, amount: String!): Conversion
+}
+type Mutation {
+  addPair(base: String!, quote: String!): TradingPair
+  setReferencePrice(symbol: String!, usdReference: String!, expectedVersion: Int!): Asset
+}
+enum AssetKind { CRYPTO FIAT }
+type Asset { symbol: String!, name: String!, kind: AssetKind!, usdReference: String!, version: Int! }
+type TradingPair { id: ID!, base: Asset!, quote: Asset!, referenceRate: String! }
+type Conversion { from: String!, to: String!, amount: String!, rate: String!, result: String! }
+type MarketIndex { id: ID!, name: String!, divisor: String!, constituents: [Constituent!]!, valueUsd: String!, level: String! }
+type Constituent { asset: Asset!, quantity: String! }
+"""Public Binance spot quotes in USDT, separate from editable USD references."""
+type ExchangePrice { symbol: String!, price: String!, change24h: String!, quoteAsset: String!, observedAt: String!, source: String! }

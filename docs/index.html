@@ -3,30 +3,39 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Interactive GraphQL job application sandbox, companion to a Java Spring Boot and Netflix DGS showcase.">
-  <title>Applications | GraphQL Sandbox</title>
+  <meta name="description" content="MarketGraph: live Binance crypto quotes, currency relationships, and basket indices through GraphQL.">
+  <title>MarketGraph | Crypto & Currencies</title>
   <link rel="stylesheet" href="./style.css">
   <script type="module" src="./assets/app.js"></script>
 </head>
 <body>
   <header>
-    <div class="brand"><i data-lucide="braces" aria-hidden="true"></i><h1>Applications <span>GraphQL</span></h1></div>
-    <a href="https://github.com/rcrespo808/spring-dgs-applications" target="_blank" rel="noreferrer"><i data-lucide="github" aria-hidden="true"></i>Source</a>
+    <div class="brand"><i data-lucide="activity" aria-hidden="true"></i><h1>MarketGraph <span>Crypto & Currencies</span></h1></div>
+    <nav><a href="https://github.com/rcrespo808/spring-dgs-markets/blob/main/docs/APPLICATION_MANUAL.md" target="_blank" rel="noreferrer"><i data-lucide="book-open" aria-hidden="true"></i>Manual</a><a href="https://github.com/rcrespo808/spring-dgs-markets" target="_blank" rel="noreferrer"><i data-lucide="github" aria-hidden="true"></i>Source</a></nav>
   </header>
-  <div class="environment"><span class="dot"></span><strong>Browser sandbox</strong><span>Local sample data. Java backend is not connected.</span></div>
+  <section class="live-market" aria-label="Binance live spot markets">
+    <div class="market-heading"><h2>Binance spot</h2><span id="feed-status" role="status">Connecting...</span><span>Quoted in USDT</span></div>
+    <div class="tickers">
+      <article data-symbol="BTCUSDT"><div class="ticker-label"><span class="coin btc">B</span><h3>BTC <small>/ USDT</small></h3><span class="change">--</span></div><div class="ticker-value"><strong class="price">--</strong><canvas data-chart="BTCUSDT" width="180" height="44" aria-label="BTC prices observed during this session"></canvas></div><div class="ticker-time"><span>24h change</span><time>Waiting for data</time></div></article>
+      <article data-symbol="ETHUSDT"><div class="ticker-label"><span class="coin eth">E</span><h3>ETH <small>/ USDT</small></h3><span class="change">--</span></div><div class="ticker-value"><strong class="price">--</strong><canvas data-chart="ETHUSDT" width="180" height="44" aria-label="ETH prices observed during this session"></canvas></div><div class="ticker-time"><span>24h change</span><time>Waiting for data</time></div></article>
+      <article data-symbol="SOLUSDT"><div class="ticker-label"><span class="coin sol">S</span><h3>SOL <small>/ USDT</small></h3><span class="change">--</span></div><div class="ticker-value"><strong class="price">--</strong><canvas data-chart="SOLUSDT" width="180" height="44" aria-label="SOL prices observed during this session"></canvas></div><div class="ticker-time"><span>24h change</span><time>Waiting for data</time></div></article>
+    </div>
+  </section>
+  <div class="environment"><span class="dot"></span><strong>Reference lab</strong><span>Editable synthetic USD values. Binance quotes stay separate.</span></div>
   <main>
     <div class="toolbar">
       <label for="example">Operation</label>
       <select id="example">
-        <option value="browse">Browse applications</option>
-        <option value="jobs">Jobs and candidates</option>
-        <option value="apply">Apply to a job</option>
-        <option value="review">Review an application</option>
-        <option value="filter">Filter by status</option>
-        <option value="invalid">Invalid transition</option>
+        <option value="pairs">Trading pairs</option>
+        <option value="live">Binance live quotes</option>
+        <option value="assets">Crypto & fiat assets</option>
+        <option value="convert">Cross-currency conversion</option>
+        <option value="indices">Basket indices</option>
+        <option value="price">Change BTC reference</option>
+        <option value="add">Add SOL / EUR pair</option>
       </select>
       <button id="run" class="primary" disabled><i data-lucide="play" aria-hidden="true"></i>Run</button>
-      <button id="reset" class="icon-button" title="Reset sample data" aria-label="Reset sample data"><i data-lucide="rotate-ccw" aria-hidden="true"></i></button>
+      <button id="reset" class="icon-button" title="Reset reference values" aria-label="Reset reference values"><i data-lucide="rotate-ccw" aria-hidden="true"></i></button>
     </div>
     <div class="workspace">
       <section class="editor-pane" aria-label="GraphQL request">
@@ -41,7 +50,7 @@
     </div>
     <details class="schema"><summary>Schema reference</summary><pre id="schema"></pre></details>
   </main>
-  <footer><span>Spring Boot + Netflix DGS companion</span><span>Demo changes reset when this page reloads.</span></footer>
+  <footer><span>MarketGraph / Java + Netflix DGS</span><span>Browser reference values reset on reload. Market data only.</span></footer>
   <noscript>This GraphQL sandbox requires JavaScript.</noscript>
 </body>
 </html>

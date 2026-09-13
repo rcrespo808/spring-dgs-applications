@@ -1,254 +1,194 @@
-# Spring DGS Applications Manual
+# MarketGraph Manual
 
-Spring DGS Applications is a GraphQL API for a simplified hiring workflow. It provides operations to browse jobs, candidates, and applications; submit an application; and move an application through review states.
+MarketGraph combines live crypto quotes with a GraphQL workspace for exploring assets, trading pairs, currency conversions, and custom basket indices.
 
-The [live browser demo](https://rcrespo808.github.io/spring-dgs-applications/) is the quickest way to explore the API contract. The Spring Boot service is available locally through GraphiQL and Docker Compose.
+[Open MarketGraph](https://rcrespo808.github.io/spring-dgs-markets/) | [Source](https://github.com/rcrespo808/spring-dgs-markets)
 
-## Quick Start
+## Data sources
 
-### Browser Demo
+| Surface | Source | Units and lifetime |
+| --- | --- | --- |
+| Binance spot panel | Public Binance mini-ticker WebSocket, REST fallback | USDT per crypto asset; updates during the session |
+| `binancePrices` | Browser streaming cache or Java REST client | USDT; timestamps identify receipt time |
+| Assets, pairs, conversions, indices | Editable synthetic reference model | USD anchor; browser edits reset on reload |
+| Local Java reference model | PostgreSQL or H2 | PostgreSQL persists; default H2 resets on shutdown |
 
-Open the [live browser demo](https://rcrespo808.github.io/spring-dgs-applications/). Select an operation, inspect or edit the GraphQL request, then select **Run**. The **Reset** control restores the sample data.
+USDT and USD are distinct units. Live exchange quotes do not overwrite synthetic references. The market panel is read-only; the reference mutations change only the local model.
 
-The playground runs the shared GraphQL schema against local sample data in the browser. Changes last until the page reloads.
+## Workspace
 
-### Local API
+The top panel displays BTC/USDT, ETH/USDT, and SOL/USDT prices, rolling 24-hour percentage changes, and observation times. Sparklines show observations collected during the current browser session, not a historical chart.
 
-Run the service with Java 21 and Maven:
+The feed status reads **Live stream**, **REST snapshot**, or **Connecting / stale**. WebSocket reconnects use exponential backoff up to 30 seconds. When the stream is not healthy, REST is attempted every 15 seconds. Observations older than 30 seconds are marked stale and rejected by the live GraphQL query. A failed connection never substitutes synthetic prices.
 
-```sh
-mvn verify
-mvn spring-boot:run
-```
+Use the operation selector to load an example. Edit the query, open **Variables** for JSON input, and select **Run**. The response pane displays JSON data or structured errors. **Reset reference values** restores the model without interrupting the Binance feed.
 
-Open [GraphiQL](http://localhost:8080/graphiql) and execute the example operations in [`examples/`](../examples).
-
-To run the API with PostgreSQL:
-
-```sh
-docker compose up --build -d
-docker compose logs -f api
-```
-
-The service listens on `http://localhost:8080`. Health is available at `GET /actuator/health`.
-
-## Core Operations
-
-### Browse Applications
-
-Applications can include nested job and candidate fields. The client chooses the response shape.
+## Live quotes
 
 ```graphql
-query BrowseApplications {
-  applications(limit: 20) {
-    id
-    status
-    job { id title company }
-    candidate { id name }
+query LiveSpot {
+  binancePrices {
+    symbol
+    price
+    quoteAsset
+    change24h
+    observedAt
+    source
   }
 }
 ```
 
-The `limit` range is `1..100`; `offset` must be non-negative. `applications` can also be filtered by status:
+`price` is the last traded spot price. `change24h` is a percentage, and `observedAt` is the time the application received the quote. `source` is `BINANCE_WEBSOCKET` or `BINANCE_REST`. Clicking Run takes a snapshot of the current data; the market panel continues streaming independently.
+
+The Java endpoint uses bounded HTTP timeouts and caches successful responses for five seconds. After expiry, an upstream failure returns `FEED_UNAVAILABLE` rather than returning expired prices as current. Binance availability can depend on the network or region.
+
+## Reference assets and pairs
 
 ```graphql
-query ApplicationsInReview($status: ApplicationStatus) {
-  applications(status: $status) {
+query ReferenceMarkets {
+  assets { symbol name kind usdReference version }
+  pairs {
     id
-    status
-    candidate { name }
-    job { title }
+    base { symbol kind }
+    quote { symbol kind }
+    referenceRate
   }
 }
 ```
+
+`AssetKind` is `CRYPTO` or `FIAT`. Symbols are case-sensitive. Seeded assets are BTC, ETH, SOL, USD, EUR, and JPY. USD is fixed at one reference unit.
+
+For a pair A/B, the rate is the number of B units per one A unit:
+
+```text
+rate(A/B) = usdReference(A) / usdReference(B)
+```
+
+With synthetic ETH = 3,000 USD and BTC = 60,000 USD, ETH/BTC = 0.05. Reversing the pair produces the reciprocal. These rates are derived relationships, not order-book quotes, and exclude spreads, fees, slippage, and liquidity.
+
+`assets` and `pairs` use `limit` (default 20, maximum 100) and non-negative `offset`. Ordering is by symbol or pair ID. `assets(kind: CRYPTO)` filters the asset list.
+
+## Conversions
+
+```graphql
+query Convert($amount: String!) {
+  convert(from: "ETH", to: "BTC", amount: $amount) {
+    from to amount rate result
+  }
+}
+```
+
+Variables:
 
 ```json
-{ "status": "REVIEWING" }
+{ "amount": "2" }
 ```
 
-| Operation | Description |
-| --- | --- |
-| `jobs(limit, offset)` | Lists the available jobs. |
-| `candidates(limit, offset)` | Lists the available candidates. |
-| `applications(status, limit, offset)` | Lists applications, optionally filtered by status. |
-| `application(id)` | Returns one application or `null` when the ID does not exist. |
+The result is `0.100000000000` BTC at the initial references. No trade is submitted.
 
-### Submit an Application
+```text
+result = amount * usdReference(from) / usdReference(to)
+```
 
-Use `applyToJob` to create an application for one candidate and one job.
+Decimal input is a string with at most 15 integer digits and 12 fractional digits. Negative amounts, scientific notation, and non-numeric strings are rejected; a zero conversion amount is valid. Java uses BigDecimal and the browser uses decimal.js. Results use 12 fractional places and half-even rounding. Conversion is computed at full intermediate precision before rounding once, independently of the displayed rounded rate.
+
+## Basket indices
 
 ```graphql
-mutation ApplyToJob {
-  applyToJob(input: {
-    jobId: "job-2"
-    candidateId: "candidate-3"
-  }) {
-    id
-    status
-    job { title }
-    candidate { name }
+query Baskets {
+  indices {
+    id name divisor valueUsd level
+    constituents { asset { symbol usdReference } quantity }
   }
 }
 ```
 
-The operation starts an application in `SUBMITTED` status. A candidate can submit only one application for the same job.
+| Index | Fixed holdings | Divisor | Initial value / level |
+| --- | --- | --- | --- |
+| CRYPTO-2 / Crypto Duo | 0.01 BTC + 0.2 ETH | 12 | 1,200 USD / 100 points |
+| FX-2 / Currency Basket | 50 EUR + 5,000 JPY | 0.9 | 90 USD / 100 points |
 
-### Update an Application Status
+```text
+basket value (USD) = sum(quantity * asset USD reference)
+index level (points) = basket value / divisor
+```
 
-Use `updateApplicationStatus` to move an application through the review workflow.
+Quantities and divisors remain fixed; market-value weights drift as references change. These are custom fixed-holdings indices, not constantly rebalanced or market-cap-weighted indices. Levels use eight fractional places. The Java store computes all index valuations in a grouped SQL query; selected constituent details use batched loaders.
+
+## Mutations
+
+### Change a reference price
 
 ```graphql
-mutation StartReview {
-  updateApplicationStatus(
-    id: "application-1"
-    status: REVIEWING
-  ) {
-    id
-    status
+mutation RevalueBitcoin {
+  setReferencePrice(symbol: "BTC", usdReference: "66000", expectedVersion: 0) {
+    symbol usdReference version
   }
 }
 ```
 
-## Application Workflow
+From a fresh model, this increments BTC's version to 1 and changes Crypto Duo to 105 points. Rerun the index query to see the effect. ETH/BTC falls because one BTC now represents more reference value.
 
-```mermaid
-stateDiagram-v2
-  [*] --> SUBMITTED
-  SUBMITTED --> REVIEWING
-  SUBMITTED --> REJECTED
-  REVIEWING --> INTERVIEW
-  REVIEWING --> REJECTED
-  INTERVIEW --> OFFERED
-  INTERVIEW --> REJECTED
-```
+Each update requires the current `version`. Repeating the same mutation returns `CONFLICT`; reload the asset version before retrying. Prices must be positive and USD cannot be changed. Database updates compare the expected version atomically, preventing stale writes. The asset DataLoader cache is cleared for the changed symbol within the request.
 
-`OFFERED` and `REJECTED` are terminal states. The API rejects skipped or invalid transitions with the `INVALID_TRANSITION` error code.
-
-## API Contract
-
-The GraphQL schema is the public API contract. It defines types, input shapes, nullability, enum values, queries, and mutations.
+### Add a trading pair
 
 ```graphql
-type Query {
-  jobs(limit: Int! = 20, offset: Int! = 0): [Job!]!
-  candidates(limit: Int! = 20, offset: Int! = 0): [Candidate!]!
-  applications(status: ApplicationStatus, limit: Int! = 20, offset: Int! = 0): [Application!]!
-  application(id: ID!): Application
-}
-
-type Mutation {
-  applyToJob(input: ApplyInput!): Application
-  updateApplicationStatus(id: ID!, status: ApplicationStatus!): Application
+mutation AddMarket {
+  addPair(base: "SOL", quote: "EUR") {
+    id referenceRate base { symbol } quote { symbol }
+  }
 }
 ```
 
-The complete SDL is available in [`applications.graphqls`](../src/main/resources/schema/applications.graphqls).
+Both assets must exist and differ. The pair ID is `SOL-EUR`. A database constraint rejects duplicate ordered pairs with `PAIR_EXISTS`. Adding a pair does not list a market on Binance.
 
-GraphQL validates invalid enums, missing required inputs, and malformed query shapes before field fetchers execute. Query variables keep runtime input separate from the operation text and allow a client to reuse an operation safely.
-
-## Architecture
+## GraphQL architecture
 
 ```mermaid
 flowchart LR
-  Client -->|GraphQL over HTTP| Fetchers[Netflix DGS fetchers]
-  Fetchers -->|queries| Store[Parameterized JDBC store]
-  Fetchers -->|mutations| Service[Transactional application service]
-  Fetchers -->|nested fields| Loaders[Request DataLoaders]
+  Query[GraphQL request] --> DGS[DGS fetchers]
+  DGS --> Binance[Binance REST client]
+  DGS --> Store[JDBC store]
+  DGS --> Service[Transactional service]
+  DGS --> Loaders[Asset and constituent DataLoaders]
   Service --> Store
   Loaders --> Store
-  Store --> Database[(PostgreSQL or H2)]
+  Store --> DB[(PostgreSQL / H2)]
 ```
 
-| Component | Responsibility |
-| --- | --- |
-| Schema | Defines the GraphQL API contract. |
-| DGS fetchers | Resolve query, mutation, and nested-field requests. |
-| Application service | Validates business rules, manages transitions, and defines transaction boundaries. |
-| DataLoaders | Batch related job and candidate records for a GraphQL request. |
-| JDBC store | Executes parameterized SQL. |
-| Flyway | Applies versioned schema and sample-data migrations. |
+The SDL is shared by Java DGS and browser GraphQL.js. Each pair's base, quote, and reference-rate fields reuse the request-scoped asset loader, batching shared symbols. Requesting pair IDs alone performs no asset lookups. Index constituent lists are also batched. JDBC calls are blocking; completed futures satisfy the loader interface without making SQL asynchronous.
 
-## Nested Data and DataLoaders
+The reference model is not a globally versioned market snapshot. Separate fields or requests can observe concurrent updates at different times. Reproducible historical analysis would require timestamped snapshots and a valuation date. This version has no return histories or correlation model; relationships are arithmetic cross rates and basket contributions.
 
-An application contains references to a job and a candidate. A request such as `applications { job { title } }` needs those related records as well.
-
-Without batching, reading a page of applications can lead to an N+1 pattern: one database query for the page and then one additional query per related record. `JobLoader` and `CandidateLoader` collect the requested IDs, remove duplicates, and perform a batched `WHERE id IN (...)` lookup.
-
-For a request that selects applications, jobs, and candidates, the backend uses one application query, one job batch query, and one candidate batch query for the page. A request that selects only application IDs does not load relationships.
-
-The batch loaders return ID-to-record maps, so each field is resolved by its key rather than by database row order.
-
-## Persistence and Consistency
-
-The service supports H2 for an immediate local start and PostgreSQL for Docker Compose. Flyway applies the following migrations on startup:
-
-| Migration | Contents |
-| --- | --- |
-| `V1__schema.sql` | Jobs, candidates, applications, constraints, and the status index. |
-| `V2__demo_data.sql` | Fictional jobs, candidates, and initial applications. |
-
-`applyToJob` runs in a transaction. The database enforces the unique `(job_id, candidate_id)` constraint, ensuring duplicate submissions cannot be created by concurrent requests.
-
-`updateApplicationStatus` validates the allowed transition and uses a compare-and-set update: the SQL statement updates the row only when its current status matches the expected status. A stale update cannot overwrite a more recent transition.
-
-## Errors
-
-Business failures use standard GraphQL responses with a stable code at `errors[].extensions.code`.
+## Error reference
 
 | Code | Meaning |
 | --- | --- |
-| `BAD_INPUT` | Pagination or mutation input is invalid. |
-| `NOT_FOUND` | The referenced job, candidate, or application does not exist. |
-| `ALREADY_APPLIED` | The candidate already has an application for the selected job. |
-| `INVALID_TRANSITION` | The requested status is not allowed from the current state. |
-| `CONFLICT` | The application changed concurrently; reload and retry. |
-| `INTERNAL_ERROR` | An unexpected server failure occurred. |
+| BAD_INPUT | Invalid decimal, pagination, version, same-asset pair, or USD edit |
+| NOT_FOUND | Unknown asset symbol |
+| PAIR_EXISTS | Ordered pair already exists |
+| CONFLICT | Reference version changed |
+| FEED_UNAVAILABLE | Binance data could not be fetched or is stale |
+| INTERNAL_ERROR | Unexpected server failure |
 
-Example duplicate submission response:
+Business codes appear under `errors[].extensions.code`. Nullable mutation and conversion results allow the affected field to return null with an error. Required inputs and enum values are validated by GraphQL before the resolver runs.
 
-```json
-{
-  "errors": [
-    {
-      "message": "Candidate has already applied to this job",
-      "extensions": { "code": "ALREADY_APPLIED" }
-    }
-  ],
-  "data": { "applyToJob": null }
-}
+## Run and verify
+
+```sh
+docker compose up --build -d
 ```
 
-## Verification
-
-The integration suite exercises the GraphQL endpoint over HTTP and verifies:
-
-- nested relationship batching and de-duplication;
-- selective field fetching without relationship lookups;
-- persisted application creation and reads;
-- duplicate prevention, including concurrent requests;
-- input and reference validation;
-- valid and invalid workflow transitions;
-- compare-and-set status protection;
-- filtering and pagination bounds;
-- null results for missing records and schema validation for invalid enums.
-
-Run the suite with:
+Open [local GraphiQL](http://localhost:8080/graphiql). The service binds locally and has no authentication. PostgreSQL uses a dedicated `markets-data` volume. With Java 21 and Maven, `mvn spring-boot:run` uses an in-memory H2 database by default.
 
 ```sh
 mvn verify
+npm ci
+npm test
+npm run build:demo
 ```
 
-The suite is configured for the default H2 database and has also been verified against PostgreSQL. The CI workflow template is available at [`docs/ci/verify.yml`](ci/verify.yml).
+Java tests cover decimal conversions, batching, normalized indices, reference propagation, concurrent edits, persistence, validation, and live-feed cache failures. Browser tests cover equivalent model calculations and Binance payload parsing. The optional CI template is [ci/verify.yml](ci/verify.yml).
 
-## Repository Guide
-
-| Area | Path |
-| --- | --- |
-| GraphQL schema | [`src/main/resources/schema/applications.graphqls`](../src/main/resources/schema/applications.graphqls) |
-| DGS fetchers | [`src/main/java/dev/rcrespo/applications/ApplicationFetchers.java`](../src/main/java/dev/rcrespo/applications/ApplicationFetchers.java) |
-| Application rules | [`src/main/java/dev/rcrespo/applications/ApplicationService.java`](../src/main/java/dev/rcrespo/applications/ApplicationService.java) |
-| DataLoaders | [`src/main/java/dev/rcrespo/applications/JobLoader.java`](../src/main/java/dev/rcrespo/applications/JobLoader.java) and [`CandidateLoader.java`](../src/main/java/dev/rcrespo/applications/CandidateLoader.java) |
-| SQL store | [`src/main/java/dev/rcrespo/applications/ApplicationStore.java`](../src/main/java/dev/rcrespo/applications/ApplicationStore.java) |
-| Error handling | [`src/main/java/dev/rcrespo/applications/GraphqlErrors.java`](../src/main/java/dev/rcrespo/applications/GraphqlErrors.java) |
-| Database migrations | [`src/main/resources/db/migration`](../src/main/resources/db/migration) |
-| Integration tests | [`src/test/java/dev/rcrespo/applications/ApplicationApiTest.java`](../src/test/java/dev/rcrespo/applications/ApplicationApiTest.java) |
+Schema: [markets.graphqls](../src/main/resources/schema/markets.graphqls). Backend: [Java sources](../src/main/java/dev/rcrespo/markets). Browser model and feed: [demo](../demo). V1/V2 migrations are historical and unchanged; V3 adds market tables without deleting existing data.

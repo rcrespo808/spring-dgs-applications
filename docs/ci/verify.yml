@@ -12,12 +12,12 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_DB: applications
+          POSTGRES_DB: markets
           POSTGRES_USER: demo
           POSTGRES_PASSWORD: local-demo-only
         ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U demo -d applications"
+          --health-cmd "pg_isready -U demo -d markets"
           --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +32,7 @@ jobs:
       - name: Verify with PostgreSQL
         if: matrix.database == 'postgres'
         env:
-          DB_URL: jdbc:postgresql://localhost:5432/applications
+          DB_URL: jdbc:postgresql://localhost:5432/markets
           DB_USER: demo
           DB_PASSWORD: local-demo-only
         run: mvn -B verify

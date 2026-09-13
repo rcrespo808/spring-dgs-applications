@@ -1,0 +1,3 @@
+query BinanceSpot {
+  binancePrices { symbol price quoteAsset change24h observedAt source }
+}

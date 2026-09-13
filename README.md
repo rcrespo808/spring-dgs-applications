@@ -1,16 +1,24 @@
-# Spring DGS Applications
+# MarketGraph
 
-A small, executable GraphQL portfolio project: browse jobs and candidates, apply to a job, and move applications through a hiring workflow.
+Crypto markets, currency relationships, and custom basket indices through GraphQL. Java 21, Spring Boot, Netflix DGS, PostgreSQL, and an interactive browser workspace.
 
-**[Open the live browser demo](https://rcrespo808.github.io/spring-dgs-applications/)**
+[Live workspace](https://rcrespo808.github.io/spring-dgs-markets/) | [Application manual](docs/APPLICATION_MANUAL.md)
 
-**[Read the application manual](docs/APPLICATION_MANUAL.md)**
+## Market data
 
-The GitHub Pages playground executes real GraphQL operations with GraphQL.js against in-memory demo data. It shares the Java API's schema, but does not run Spring Boot, JDBC or DGS in the browser. Mutations last until the page reloads. The backend's batching, transactions and concurrency behavior are demonstrated by the Java implementation and tests.
+The Binance spot panel streams BTC/USDT, ETH/USDT, and SOL/USDT over the public market-data WebSocket. REST provides an initial snapshot and a fallback when the stream is unavailable. Prices, rolling 24-hour changes, receipt timestamps, and session sparklines update in the browser. No credentials are required.
 
-All seeded companies and candidates are fictional. The browser playground uses local sample data; the Spring Boot service, database migrations, and integration tests are available in this repository.
+`binancePrices` exposes the live quotes through GraphQL. The Java service fetches Binance REST snapshots with a five-second cache; the browser uses its streaming cache. Unavailable or stale data produces `FEED_UNAVAILABLE`.
 
-## Run locally
+The **Reference lab** contains separate, editable synthetic USD values for BTC, ETH, SOL, USD, EUR, and JPY. It supports cross rates, conversions, and custom indices. Binance quotes are denominated in USDT; they are never silently treated as USD or mixed into the synthetic reference model.
+
+## Run
+
+```sh
+docker compose up --build -d
+```
+
+Open [GraphiQL](http://localhost:8080/graphiql). Compose runs PostgreSQL with a persistent `markets-data` volume. Set `PORT=8081` before the Compose command if needed.
 
 With Java 21 and Maven 3.9+:
 
@@ -19,122 +27,62 @@ mvn verify
 mvn spring-boot:run
 ```
 
-Open [GraphiQL](http://localhost:8080/graphiql) and run the operations in [`examples/`](examples). The default H2 database needs no setup and resets when the process exits. Health is available at `/actuator/health`.
+The default H2 database is in memory. The API is at `POST /graphql`; health is at `GET /actuator/health`.
 
-For persistent PostgreSQL, with Docker Compose:
-
-```sh
-docker compose up --build -d
-docker compose logs -f api
-```
-
-The API binds to localhost. Use `PORT=8081 docker compose up --build -d` if port 8080 is occupied. `docker compose down` stops the services and keeps data; `docker compose down -v` also deletes the demo database.
-
-## Try the API
+## Explore
 
 ```graphql
 query {
-  applications(limit: 20) {
-    id
-    status
-    job { title company }
-    candidate { name }
-  }
+  binancePrices { symbol price quoteAsset change24h observedAt source }
+  pairs { id base { symbol kind } quote { symbol } referenceRate }
+  convert(from: "ETH", to: "BTC", amount: "2") { rate result }
+  indices { id name level valueUsd constituents { asset { symbol } quantity } }
 }
 ```
 
-```sh
-curl http://localhost:8080/graphql \
-  -H 'Content-Type: application/json' \
-  --data '{"query":"{ applications { id status job { title } candidate { name } } }"}'
-```
+The synthetic ETH/BTC rate starts at `0.050000000000`; converting two ETH returns `0.100000000000` BTC. Both custom indices start at 100 points. Increasing the BTC reference from 60,000 to 66,000 moves Crypto Duo to 105 points.
 
 ```graphql
 mutation {
-  applyToJob(input: { jobId: "job-2", candidateId: "candidate-3" }) {
-    id
-    status
+  setReferencePrice(symbol: "BTC", usdReference: "66000", expectedVersion: 0) {
+    symbol usdReference version
   }
 }
 ```
 
-Submitting that application again produces `errors[].extensions.code: ALREADY_APPLIED`. Use the returned ID in `updateApplicationStatus`. Jobs and candidates are seeded read-only fixtures in this first version.
+## Design
 
-## What this demonstrates
-
-| Concern | Implementation and evidence |
+| Concern | Implementation |
 | --- | --- |
-| Schema-first API | Explicit SDL, inputs, enums, nullability and nested fields |
-| Netflix DGS | Annotated query, mutation and field fetchers |
-| N+1 avoidance | Request-scoped mapped DataLoaders; one `IN` query per relationship type for a page |
-| Selective fetching | Querying only application IDs performs no relationship lookups |
-| SQL persistence | Spring JDBC, Flyway migrations, PostgreSQL; H2 for zero-setup exploration |
-| Business rules | Transactional mutations, unique application constraint, explicit status transitions |
-| Concurrent writes | Duplicate submission protection and compare-and-set status updates |
-| Errors | Stable business error codes; internal exceptions logged without exposing SQL to clients |
-| Pagination | Deterministic ID ordering, offset/limit, maximum 100 records per field |
-| Verification | 11 HTTP/persistence integration tests, batching assertions and a concurrent duplicate test; verified locally on H2 and PostgreSQL |
+| Schema contract | SDL shared between DGS and browser GraphQL.js |
+| Currency relationships | Base/quote assets and derived reference rates |
+| Decimal arithmetic | Java BigDecimal and browser decimal.js; monetary values travel as strings |
+| Batching | Shared asset DataLoader for pair sides and constituent assets; separate constituent batch loader |
+| Indices | Fixed-quantity baskets, USD valuation, fixed divisor, normalized level |
+| Consistency | Transactional writes, unique pair constraint, optimistic price versions |
+| Persistence | Parameterized JDBC queries, Flyway migrations, PostgreSQL/H2 |
+| Live feed | Public Binance WebSocket, reconnect backoff, REST fallback, freshness checks |
 
-## Architecture and tradeoffs
+## Browser development
 
-```mermaid
-flowchart LR
-  Client -->|GraphQL over HTTP| Fetchers[DGS fetchers]
-  Fetchers -->|mutations| Service[Transactional service]
-  Fetchers -->|nested fields| Loaders[Request DataLoaders]
-  Fetchers -->|queries| Store[Parameterized JDBC store]
-  Service --> Store
-  Loaders --> Store
-  Store --> DB[(PostgreSQL / H2)]
+```sh
+npm ci
+npm test
+npm run build:demo
 ```
 
-The loader batches related IDs and returns an ID-to-record map, so results do not depend on database row ordering. JDBC work runs synchronously on the servlet execution path; the completed future satisfies the DataLoader contract and does not make database access nonblocking.
+GitHub Pages serves `docs/` from `main`. Commit the generated `docs/assets/app.js` after source edits. The browser executes the shared SDL locally; its reference changes reset on reload. It does not call the Java service. The only external runtime connection is public Binance market data.
 
-With both nested fields selected, a page uses one application query, one job batch query and one candidate batch query. A test asserts one batch invocation for each relationship, including deduplication when two applications share a job. This guarantee concerns one application page, not an arbitrary operation with many aliases.
+Java tests cover conversions, rounding, batching, index valuation, persistence, conflicts, request cache invalidation, and Binance cache/failure behavior. Browser tests cover matching reference calculations and feed parsing. [`docs/ci/verify.yml`](docs/ci/verify.yml) remains a workflow template; enabling it requires a GitHub credential with workflow permission.
 
-The schema keeps mutation results nullable so a business error can be returned at that field. A missing `application(id:)` returns null. Invalid enum values and missing required inputs are rejected by GraphQL validation before business logic runs.
+## Operations
 
-```mermaid
-stateDiagram-v2
-  [*] --> SUBMITTED
-  SUBMITTED --> REVIEWING
-  REVIEWING --> INTERVIEW
-  INTERVIEW --> OFFERED
-  SUBMITTED --> REJECTED
-  REVIEWING --> REJECTED
-  INTERVIEW --> REJECTED
-```
+The service is a local reference-data tool. It has no exchange account access, order execution, authentication, or authorization. Reference edits affect only the model; they never place trades. Prices are last-trade data, not executable bids or asks. The custom indices are application-defined baskets, not exchange benchmarks.
 
-OFFERED and REJECTED are terminal. A compare-and-set SQL update prevents an older status from overwriting a concurrent change. The unique `(job_id, candidate_id)` constraint also protects against simultaneous duplicate submissions.
-
-Offset pagination keeps this starter small. UUID ordering is deterministic, not chronological; cursor pagination and creation timestamps would be sensible next additions.
-
-## Continuous integration
-
-[`docs/ci/verify.yml`](docs/ci/verify.yml) contains a GitHub Actions matrix for H2 and PostgreSQL. It is a template, not an active workflow: the publishing login lacked GitHub's `workflow` scope. To enable it, move it to `.github/workflows/verify.yml` using a login authorized to manage workflows. Both database configurations have passed the test suite locally.
-
-## Browser demo development
-
-With Node.js 22+, run `npm ci` followed by `npm run build:demo`. This bundles GraphQL.js, Lucide icons and the shared SDL into `docs/assets/app.js`. Commit the generated asset along with source changes; GitHub Pages serves the `docs/` directory from `main`. The demo requires no external CDN or backend. Its small in-memory resolvers mirror the starter workflow but do not substitute for backend integration tests.
-
-## Scope and next steps
-
-This is a local demo with no authentication or authorization. Any caller can view demo candidates and change applications. Do not load real candidate data or expose this service publicly. Demo credentials in Compose and CI are disposable examples.
-
-Next increments: authenticated candidate/recruiter roles, authorization tests, query complexity and alias limits, cursor pagination, request tracing, and a deployment exercise. AWS, MongoDB, federation, subscriptions, load testing and production operations are not implemented. Dependency versions are pinned for reproducibility, not a claim of being the latest or security-audited.
-
-## Demo walkthrough
-
-1. Run a nested application query, then remove the nested fields to compare the response shape.
-2. Run the duplicate application mutation twice and inspect the `ALREADY_APPLIED` response.
-3. Advance an application through the workflow and try an invalid transition.
-4. Use query variables to filter applications by status.
-5. Review the DataLoader and integration-test sections in the [application manual](docs/APPLICATION_MANUAL.md).
+V1 and V2 migrations are retained unchanged as historical migration records. V3 introduces the market domain without deleting existing data. Legacy tables are unused by the current API. The renamed Compose project uses a separate market database volume, preserving the previous volume.
 
 ## References
 
-- [Netflix DGS documentation](https://netflix.github.io/dgs/)
-- [DGS DataLoaders](https://netflix.github.io/dgs/data-loaders/)
-- [GraphQL learn](https://graphql.org/learn/)
-
-Stack: Java 21, Spring Boot 3.5.5, Netflix DGS 10.5.0, Maven, PostgreSQL 17.
+- [Netflix DGS](https://netflix.github.io/dgs/)
+- [Binance public market-data endpoints](https://github.com/binance/binance-spot-api-docs/blob/master/faqs/market_data_only.md)
+- [Binance WebSocket streams](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md)

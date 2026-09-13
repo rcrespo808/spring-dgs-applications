@@ -1,0 +1,5 @@
+query Markets {
+  pairs { id base { symbol kind } quote { symbol } referenceRate }
+  indices { id name level valueUsd constituents { asset { symbol } quantity } }
+  convert(from: "ETH", to: "BTC", amount: "2") { rate result }
+}

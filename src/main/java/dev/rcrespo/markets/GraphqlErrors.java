@@ -1,4 +1,4 @@
-package dev.rcrespo.applications;
+package dev.rcrespo.markets;
 
 import graphql.GraphqlErrorBuilder;
 import graphql.execution.DataFetcherExceptionHandlerParameters;
@@ -9,7 +9,7 @@ import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import static dev.rcrespo.applications.Domain.BusinessException;
+import static dev.rcrespo.markets.Domain.BusinessException;
 
 @Component
 public class GraphqlErrors extends SimpleDataFetcherExceptionHandler {
