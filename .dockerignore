@@ -2,3 +2,6 @@ target
 .git
 .idea
 .env
+node_modules
+docs
+demo

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Interactive GraphQL job application sandbox, companion to a Java Spring Boot and Netflix DGS showcase.">
+  <title>Applications | GraphQL Sandbox</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./assets/app.js"></script>
+</head>
+<body>
+  <header>
+    <div class="brand"><i data-lucide="braces" aria-hidden="true"></i><h1>Applications <span>GraphQL</span></h1></div>
+    <a href="https://github.com/rcrespo808/spring-dgs-applications" target="_blank" rel="noreferrer"><i data-lucide="github" aria-hidden="true"></i>Source</a>
+  </header>
+  <div class="environment"><span class="dot"></span><strong>Browser sandbox</strong><span>Local sample data. Java backend is not connected.</span></div>
+  <main>
+    <div class="toolbar">
+      <label for="example">Operation</label>
+      <select id="example">
+        <option value="browse">Browse applications</option>
+        <option value="jobs">Jobs and candidates</option>
+        <option value="apply">Apply to a job</option>
+        <option value="review">Review an application</option>
+        <option value="filter">Filter by status</option>
+        <option value="invalid">Invalid transition</option>
+      </select>
+      <button id="run" class="primary" disabled><i data-lucide="play" aria-hidden="true"></i>Run</button>
+      <button id="reset" class="icon-button" title="Reset sample data" aria-label="Reset sample data"><i data-lucide="rotate-ccw" aria-hidden="true"></i></button>
+    </div>
+    <div class="workspace">
+      <section class="editor-pane" aria-label="GraphQL request">
+        <div class="pane-heading"><label for="query">QUERY</label><span>GraphQL</span></div>
+        <textarea id="query" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="GraphQL query"></textarea>
+        <details class="variables"><summary>Variables</summary><textarea id="variables" spellcheck="false" aria-label="Query variables">{}</textarea></details>
+      </section>
+      <section class="result-pane" aria-label="GraphQL response">
+        <div class="pane-heading"><span>RESPONSE</span><output id="status" aria-live="polite">Loading engine...</output></div>
+        <pre id="result" tabindex="0" aria-label="JSON response"></pre>
+      </section>
+    </div>
+    <details class="schema"><summary>Schema reference</summary><pre id="schema"></pre></details>
+  </main>
+  <footer><span>Spring Boot + Netflix DGS companion</span><span>Demo changes reset when this page reloads.</span></footer>
+  <noscript>This GraphQL sandbox requires JavaScript.</noscript>
+</body>
+</html>

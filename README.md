@@ -2,6 +2,10 @@
 
 A small, executable GraphQL portfolio project: browse jobs and candidates, apply to a job, and move applications through a hiring workflow.
 
+**[Open the live browser demo](https://rcrespo808.github.io/spring-dgs-applications/)**
+
+The GitHub Pages playground executes real GraphQL operations with GraphQL.js against in-memory demo data. It shares the Java API's schema, but does not run Spring Boot, JDBC or DGS in the browser. Mutations last until the page reloads. The backend's batching, transactions and concurrency behavior are demonstrated by the Java implementation and tests.
+
 **Learning sandbox, not production experience.** This repository demonstrates hands-on practice with GraphQL and Netflix DGS. It was developed with AI assistance; it should be presented alongside an explanation of the design and tests, not as evidence of having operated GraphQL in production. All seeded companies and candidates are fictional.
 
 ## Run locally
@@ -106,6 +110,10 @@ Offset pagination keeps this starter small. UUID ordering is deterministic, not 
 ## Continuous integration
 
 [`docs/ci/verify.yml`](docs/ci/verify.yml) contains a GitHub Actions matrix for H2 and PostgreSQL. It is a template, not an active workflow: the publishing login lacked GitHub's `workflow` scope. To enable it, move it to `.github/workflows/verify.yml` using a login authorized to manage workflows. Both database configurations have passed the test suite locally.
+
+## Browser demo development
+
+With Node.js 22+, run `npm ci` followed by `npm run build:demo`. This bundles GraphQL.js, Lucide icons and the shared SDL into `docs/assets/app.js`. Commit the generated asset along with source changes; GitHub Pages serves the `docs/` directory from `main`. The demo requires no external CDN or backend. Its small in-memory resolvers mirror the starter workflow but do not substitute for backend integration tests.
 
 ## Scope and next steps
 
