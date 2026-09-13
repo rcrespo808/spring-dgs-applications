@@ -4,6 +4,8 @@ A small, executable GraphQL portfolio project: browse jobs and candidates, apply
 
 **[Open the live browser demo](https://rcrespo808.github.io/spring-dgs-applications/)**
 
+**[Read the interview manual](docs/INTERVIEW_MANUAL.md)**
+
 The GitHub Pages playground executes real GraphQL operations with GraphQL.js against in-memory demo data. It shares the Java API's schema, but does not run Spring Boot, JDBC or DGS in the browser. Mutations last until the page reloads. The backend's batching, transactions and concurrency behavior are demonstrated by the Java implementation and tests.
 
 **Learning sandbox, not production experience.** This repository demonstrates hands-on practice with GraphQL and Netflix DGS. It was developed with AI assistance; it should be presented alongside an explanation of the design and tests, not as evidence of having operated GraphQL in production. All seeded companies and candidates are fictional.
