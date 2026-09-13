@@ -91,3 +91,8 @@ footer { padding: 22px 32px; display: flex; flex-wrap: wrap; justify-content: sp
   .ticker-value canvas { width: 100%; }
   .tickers article { padding: 0 12px; }
 }
+@media (max-width: 360px) {
+  nav a span { display: none; }
+  nav a { min-width: 32px; min-height: 36px; justify-content: center; }
+  nav { gap: 6px; }
+}
