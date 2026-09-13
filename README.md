@@ -4,11 +4,11 @@ A small, executable GraphQL portfolio project: browse jobs and candidates, apply
 
 **[Open the live browser demo](https://rcrespo808.github.io/spring-dgs-applications/)**
 
-**[Read the interview manual](docs/INTERVIEW_MANUAL.md)**
+**[Read the application manual](docs/APPLICATION_MANUAL.md)**
 
 The GitHub Pages playground executes real GraphQL operations with GraphQL.js against in-memory demo data. It shares the Java API's schema, but does not run Spring Boot, JDBC or DGS in the browser. Mutations last until the page reloads. The backend's batching, transactions and concurrency behavior are demonstrated by the Java implementation and tests.
 
-**Learning sandbox, not production experience.** This repository demonstrates hands-on practice with GraphQL and Netflix DGS. It was developed with AI assistance; it should be presented alongside an explanation of the design and tests, not as evidence of having operated GraphQL in production. All seeded companies and candidates are fictional.
+All seeded companies and candidates are fictional. The browser playground uses local sample data; the Spring Boot service, database migrations, and integration tests are available in this repository.
 
 ## Run locally
 
@@ -123,13 +123,13 @@ This is a local demo with no authentication or authorization. Any caller can vie
 
 Next increments: authenticated candidate/recruiter roles, authorization tests, query complexity and alias limits, cursor pagination, request tracing, and a deployment exercise. AWS, MongoDB, federation, subscriptions, load testing and production operations are not implemented. Dependency versions are pinned for reproducibility, not a claim of being the latest or security-audited.
 
-## Interview walkthrough
+## Demo walkthrough
 
-1. Run a nested query, then remove nested fields and explain what SQL work disappears.
-2. Show the batching assertion and explain the N+1 problem it prevents.
-3. Submit an application twice and explain why database enforcement matters under concurrency.
-4. Advance an application through the workflow and try an invalid transition.
-5. Explain nullable results, error codes, offset pagination and what must change before production.
+1. Run a nested application query, then remove the nested fields to compare the response shape.
+2. Run the duplicate application mutation twice and inspect the `ALREADY_APPLIED` response.
+3. Advance an application through the workflow and try an invalid transition.
+4. Use query variables to filter applications by status.
+5. Review the DataLoader and integration-test sections in the [application manual](docs/APPLICATION_MANUAL.md).
 
 ## References
 
